@@ -11,6 +11,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script>try{var __t=localStorage.getItem('ct-theme');if(__t==='light'||__t==='dark')document.documentElement.setAttribute('data-theme',__t)}catch(e){}</script>
 <style>
 :root{
   --red:#D7191F;--red-ink:#B3141A;--maroon:#7A0E12;--steel:#8B929A;
@@ -360,6 +361,43 @@ body.locked .app{visibility:hidden}
 .logout:hover{background:var(--red)}
 .ucard{gap:10px}
 img.broken{min-height:40px;background:var(--danger-bg)}
+
+/* ===== UI update: theme toggle, sidebar layout, greeting, settings scroll ===== */
+.themebtn{flex:none;display:inline-flex;align-items:center;gap:7px;padding:9px 13px}
+.themebtn .tt{font-weight:500}
+.mgreet{display:none;font-size:12.5px;color:var(--muted);font-weight:500}
+.greet{display:flex;align-items:center;gap:10px;padding:2px 6px 10px}
+.greet .gi{flex:none;width:34px;height:34px;border-radius:10px;display:grid;place-items:center;font-size:18px;background:rgba(255,255,255,.07)}
+.greet b{display:block;color:#fff;font-weight:600;font-size:14px;line-height:1.3;overflow-wrap:anywhere}
+.greet small{display:block;font-size:11.5px;color:var(--side-ink)}
+.tscroll{max-height:690px;overflow-y:auto;overflow-x:hidden;padding-right:4px;scrollbar-width:thin}
+.tscroll .titem{height:40px;margin-bottom:6px}
+.tscroll .titem>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@media (min-width:901px){
+  .app{grid-template-columns:244px minmax(0,1fr)}
+  .side{overflow:hidden}
+  .side .logo-tile,.side .side-title,.side .side-sub{flex:none}
+  .side-sub{margin-bottom:10px}
+  .tabs{flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden;margin:0 -14px;padding:2px 14px;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.28) transparent;overscroll-behavior:contain}
+  .tabs::-webkit-scrollbar{width:6px}
+  .tabs::-webkit-scrollbar-thumb{background:rgba(255,255,255,.22);border-radius:6px}
+  .tabs a{white-space:normal;flex:none}
+  .tabs .tx{white-space:normal;overflow-wrap:anywhere;line-height:1.3;min-width:0}
+  .tabs .badge{flex:none}
+  .side-foot{flex:none;margin-top:8px;padding-top:10px;border-top:1px solid rgba(255,255,255,.08)}
+  .side-today{margin:0 2px 10px}
+}
+@media (min-width:901px) and (max-height:720px){
+  .side-title,.side-sub{display:none}
+  .logo-tile{margin-bottom:8px}
+  .side-today{padding:10px}
+  .ring{width:46px;height:46px}.ring span{width:36px;height:36px;font-size:11.5px}
+  .greet{padding-bottom:8px}.greet .gi{width:28px;height:28px;font-size:15px}
+}
+@media (max-width:900px){
+  .crumb{display:none}.mgreet{display:block}
+  .themebtn .tt{display:none}.themebtn{padding:9px 11px}
+}
 </style>
 </head>
 <body class="locked">
@@ -369,14 +407,15 @@ img.broken{min-height:40px;background:var(--danger-bg)}
     <div class="side-title">Order Tracker</div>
     <p class="side-sub">CarTrends Auto Parts</p>
     <nav class="tabs" id="tabs" aria-label="Main navigation"></nav>
-    <div class="side-foot"><div class="side-today" id="sideToday"></div>
+    <div class="side-foot"><div class="greet" id="sideGreet"></div><div class="side-today" id="sideToday"></div>
       <div class="ucard" id="ucard"><span class="uav">R<i title="Online"></i></span><div><b>Ronak</b><small>CRM Executive</small></div></div></div>
   </aside>
   <div class="mainwrap">
     <header class="topbar">
-      <div><div class="crumb">CarTrends Order Tracker</div><h1 id="ptitle">Dashboard</h1></div>
+      <div><div class="crumb">CarTrends Order Tracker</div><div class="mgreet" id="mgreet"></div><h1 id="ptitle">Dashboard</h1></div>
       <div class="online" id="online" hidden></div>
       <div class="clock" id="clock"></div>
+      <button class="btn themebtn" id="themeBtn" type="button" aria-label="Switch between light and dark mode"></button>
       <a class="btn primary nbtn" href="#new-order" style="text-decoration:none">+ New Order</a><button class="btn" id="toplogout" data-act="logout" hidden>Log out</button>
     </header>
     <div id="robanner" class="robanner" hidden>🔒 <span><b>View only.</b> Your access to this tracker is Viewer or Commenter, so nothing you enter is saved. Ask the owner to change your access to <b>Contributor</b> in Share.</span></div>
@@ -524,7 +563,7 @@ async function startShared(){
 function resolveNames(){}
 function nm(id,plain){if(!id)return 'Earlier (before the new system)';const n=(PEOPLE[id]&&PEOPLE[id].name)||LEGACY[id]||'Someone';return plain?n:n+(id===ME.id?' (you)':'')}
 function avatar(id,size){const s=size||28;const n=nm(id,true);return `<span class="av" style="width:${s}px;height:${s}px">${esc((n.match(/[A-Za-z]/g)||['?']).slice(0,2).join('').toUpperCase())}</span>`}
-function renderWho(){const rb=$('#robanner');if(rb)rb.hidden=true;const u=$('#ucard');if(!u)return;u.classList.remove('nameform');
+function renderWho(){renderGreet();const rb=$('#robanner');if(rb)rb.hidden=true;const u=$('#ucard');if(!u)return;u.classList.remove('nameform');
   u.innerHTML=`<span class="uav">${esc((ME.name||'U')[0].toUpperCase())}<i title="Online"></i></span><div style="flex:1;min-width:0"><b>${esc(ME.name||'')}</b><small>${isAdmin()?'Admin':'Team member'} · ${esc(ME.username||'')}</small></div><button class="logout" data-act="logout" title="Log out" aria-label="Log out">⏻</button>`;
   const tl=$('#toplogout');if(tl)tl.hidden=!ME.id}
 function nameForm(){return ''}
@@ -639,12 +678,26 @@ function chip(o){
 }
 function tlCls(t){const d=ageDays(t);return d>=3?'tl d':d>=1?'tl w':'tl'}
 
+
+/* ---------- theme (light / dark), greeting, sidebar counts ---------- */
+function curTheme(){const t=document.documentElement.getAttribute('data-theme');return t==='dark'||t==='light'?t:(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light')}
+function paintThemeBtn(){const b=$('#themeBtn');if(!b)return;const d=curTheme()==='dark';b.innerHTML=d?'<span>☀️</span><span class="tt">Light mode</span>':'<span>🌙</span><span class="tt">Dark mode</span>';b.title=d?'Switch to Light Mode (Day)':'Switch to Dark Mode (Night)'}
+function setTheme(t){document.documentElement.setAttribute('data-theme',t);try{localStorage.setItem('ct-theme',t)}catch(e){}paintThemeBtn()}
+function greetInfo(){const h=new Date().getHours();return h<12?['Good Morning','🌅']:h<17?['Good Afternoon','☀️']:['Good Evening','🌙']}
+function renderGreet(){
+  const [g,ic]=greetInfo(),n0=String((ME&&(ME.name||ME.username))||'').trim().split(/\s+/)[0],txt=g+(n0?', '+n0:'')+'!';
+  const sg=$('#sideGreet');if(sg)sg.innerHTML=`<span class="gi">${ic}</span><div><b>${esc(txt)}</b><small>${esc(new Date().toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'short'}))}</small></div>`;
+  const mg=$('#mgreet');if(mg)mg.textContent=txt}
+function sideCounts(){const s0=startOfDay(Date.now()),c={new:0,pending:0,punched:0,cancelled:0};
+  S.orders.forEach(o=>{if(o.status==='punched'){if((o.punchedAt||0)>=s0)c.punched++}else if(o.status==='cancelled'){if((o.cancelledAt||0)>=s0)c.cancelled++}else if(c[o.status]!==undefined)c[o.status]++});return c}
+const SIDE_TIP={new:'Orders that need action',pending:'All pending orders (all dates)',punched:'Punched today',cancelled:'Cancelled today'};
+
 /* ---------- nav ---------- */
 function renderTabs(){
-  const c=counts(S.orders);
+  const c=counts(S.orders),sc=sideCounts();renderGreet();
   $('#tabs').innerHTML=TABS.filter(t=>(t[0]!=='team'||isAdmin())&&(t[0]!=='setup'||isAdm())).map(([id,label,st,ic])=>{
-    const n=st?c[st]:null;const hot=st==='new'&&n>0;
-    return `<a href="#${id}" class="${hot?'hot':''}" ${VIEW===id?'aria-current="page"':''}><span class="ico">${ICON[ic]}</span><span class="tx">${label}</span>${n!==null?`<span class="badge">${n}</span>`:''}</a>`;
+    const n=st?sc[st]:null;const hot=st==='new'&&n>0;
+    return `<a href="#${id}" class="${hot?'hot':''}" ${st?`title="${SIDE_TIP[st]}"`:''} ${VIEW===id?'aria-current="page"':''}><span class="ico">${ICON[ic]}</span><span class="tx">${label}</span>${n!==null?`<span class="badge">${n}</span>`:''}</a>`;
   }).join('');
   const s0=startOfDay(Date.now()),td=S.orders.filter(o=>o.createdAt>=s0),tp=td.filter(o=>o.status==='punched').length,pct=td.length?Math.round(tp/td.length*100):0;
   $('#sideToday').innerHTML=`<div class="ring" style="--p:${pct}"><span>${pct}%</span></div><div><b>Today</b><small>${tp} of ${td.length} orders punched</small><small class="pd">${c.pending} pending, ${c.new} need action</small></div>`;
@@ -799,7 +852,7 @@ Object.entries(COL_ORDER).forEach(([k,names])=>{const L=LISTS[k];L.cols.push(C.l
 function renderList(k){
   const L=LISTS[k];
   view.innerHTML=`<section class="list-head"><div><h2>${L.title}</h2><p class="sub">${L.sub}</p></div>
-    <div class="tools"><span class="count" id="lcount"></span><input id="q" type="search" placeholder="Search ref, customer, agent" aria-label="Search">${k==='pending'||k==='punched'?'<button class="btn primary" id="rpt" title="Pending report as a formatted Excel file">📄 Report</button><button class="btn primary" id="rptimg" title="Same report as a picture (PNG)">🖼 Report Image</button>':''}<button class="btn" id="xls">⬇ Export Excel</button></div></section>
+    <div class="tools"><span class="count" id="lcount"></span><input id="q" type="search" placeholder="Search ref, customer, agent" aria-label="Search">${k==='pending'||k==='punched'?'<button class="btn primary" id="rpt" title="Pending report as a formatted Excel file">📄 Report Excel</button><button class="btn primary" id="rptimg" title="Same report as a picture (PNG)">🖼 Report Image</button>':''}<button class="btn" id="xls">⬇ Export Excel</button></div></section>
     <div class="frow">${filterBar(lf().k,lf(),'lrange')}<span class="fnote">Filtered by ${DATEF[k][1]}${lf().k!=='all'?': <b>'+esc(rangeLabel(lf().k,lf()))+'</b>':''}</span></div>
     <p id="needmsg" class="needmsg" hidden></p>
     <div class="tbl"><table class="list"><thead><tr id="thr">${thRow(k)}${actsOn(L)?'<th class="actcol">Action</th>':''}</tr></thead><tbody id="tb"></tbody></table></div>`;
@@ -1170,9 +1223,9 @@ function renderTeam(){
 
 /* ---------- settings ---------- */
 function renderSetup(){
-  const box=(k,t,s)=>{const ro=k==='reasons'&&!canAddStatus();return `<section class="panel"><h3>${t}</h3><p class="sub">${s}${ro?'. Only admins can add or remove a status':''}</p>
+  const box=(k,t,s)=>{const ro=k==='reasons'&&!canAddStatus();return `<section class="panel"><h3>${t}</h3><p class="sub">${s}${k==='customers'?' ('+S.customers.length+' names)':''}${ro?'. Only admins can add or remove a status':''}</p>
     ${ro?'':`<div class="addrow"><input id="add-${k}" placeholder="New name" aria-label="Add to ${t}"><button class="btn primary sm" data-act="additem" data-k="${k}">Add</button></div>`}
-    ${S[k].map((v,i)=>`<div class="titem"><span>${esc(v)}${k==='customers'&&S.custAgent[v.toLowerCase()]?` <small class="muted">(${esc(S.custAgent[v.toLowerCase()])})</small>`:''}</span>${ro?'':`<button class="x" data-act="delitem" data-k="${k}" data-i="${i}" aria-label="Remove ${esc(v)}">×</button>`}</div>`).join('')}</section>`};
+    ${k==='customers'?'<div class="tscroll">':''}${S[k].map((v,i)=>`<div class="titem"><span>${esc(v)}${k==='customers'&&S.custAgent[v.toLowerCase()]?` <small class="muted">(${esc(S.custAgent[v.toLowerCase()])})</small>`:''}</span>${ro?'':`<button class="x" data-act="delitem" data-k="${k}" data-i="${i}" aria-label="Remove ${esc(v)}">×</button>`}</div>`).join('')}${k==='customers'?'</div>':''}</section>`};
   view.innerHTML=`<section class="list-head"><div><h2>Settings</h2><p class="sub">Manage dropdown lists here</p></div></section>
     <div class="set-grid">${box('agents','Agents','These names appear in the Agent Name dropdown')}${box('customers','Customers','Suggestions for Customer Name')}${box('reasons','Pending status','Options in the Order Pending status dropdown')}</div>
     <section class="panel" style="margin-top:16px"><h3>Connections (Google)</h3><p class="sub">Links from the Apps Script setup: attachments are saved in Google Drive, and the backup sheet updates every 5 minutes by itself.</p>
@@ -1358,7 +1411,7 @@ async function punchedReport(list){
     const f=LF.punched||{k:'today'},tag=f.k==='all'?'':'_'+rangeLabel(f.k,f).replace(/[^A-Za-z0-9-]+/g,'_');
     await saveFile(`Punched_Orders_Report${tag}_${fmtDate(Date.now())}.xlsx`,X.write(wb,{bookType:'xlsx',type:'array'}),'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   }catch(e){toast('Could not make the report. Check your internet connection and try again')}
-  if(btn){btn.disabled=false;btn.textContent='📄 Report'}}
+  if(btn){btn.disabled=false;btn.textContent='📄 Report Excel'}}
 
 /* ---------- pending report: formatted Excel (yellow header, borders, centered) ---------- */
 let XS=null;
@@ -1383,7 +1436,7 @@ async function pendingReport(list){
     const wb=X.utils.book_new();X.utils.book_append_sheet(wb,ws,'Pending Orders');
     await saveFile(`Pending_Orders_Report_${fmtDate(Date.now())}.xlsx`,X.write(wb,{bookType:'xlsx',type:'array'}),'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   }catch(e){toast('Could not make the report. Check your internet connection and try again')}
-  if(btn){btn.disabled=false;btn.textContent='📄 Report'}}
+  if(btn){btn.disabled=false;btn.textContent='📄 Report Excel'}}
 
 
 /* ---------- report as image (PNG): same columns, yellow header, borders, centered ---------- */
@@ -1510,6 +1563,7 @@ $('#llogo').src=LOGO;
 SB=window.supabase.createClient(SUPA_URL,SUPA_KEY,{auth:{persistSession:true,autoRefreshToken:true,storageKey:'ct-order-tracker-auth'}});
 $('#lbtn').onclick=doLogin;$('#lp').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin()});$('#lu').addEventListener('keydown',e=>{if(e.key==='Enter')$('#lp').focus()});
 SB.auth.onAuthStateChange((ev,session)=>{if(ev==='SIGNED_OUT'){showLogin('');return}if(ev==='SIGNED_IN'||ev==='INITIAL_SESSION')setTimeout(()=>onSession(session),0)});
+paintThemeBtn();$('#themeBtn').addEventListener('click',()=>setTheme(curTheme()==='dark'?'light':'dark'));
 setInterval(tick,1000);
 setInterval(()=>{if(modalOpen||!LOADED)return;renderTabs();if(VIEW==='dashboard')renderDash();else if(LISTS[VIEW])drawRows();else if(VIEW==='customer')drawCustDetail();else if(VIEW==='team')renderTeam()},30000);
 </script>
