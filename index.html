@@ -447,7 +447,7 @@ function seed(){S={agents:[],customers:[],custAgent:{},reasons:['Credit Block','
 function load(){try{const r=localStorage.getItem(KEY);if(r){S=JSON.parse(r);S.custAgent=S.custAgent||{};return}}catch(e){}seed();save()}
 /* ---------- storage: Supabase (live shared database + login) ---------- */
 const SUPA_URL='https://fpxvzcvpjktvlwnczvka.supabase.co',SUPA_KEY='sb_publishable_0IKFRrQbIApiAEyxb3KCsw_dj2GIfNx',LOGIN_DOMAIN='@cartrends-tracker.local';
-let SB=null,DB=null,USER=null,ASSETS=null,ROOM=null,MODE='shared',LOADED=false,CAN_WRITE=true,PEERS=[],MIG=null,RT=null,PRES=null;
+let RTST='',RTWARNED=false,POLLING=false,LASTSYNC=Date.now(),SB=null,DB=null,USER=null,ASSETS=null,ROOM=null,MODE='shared',LOADED=false,CAN_WRITE=true,PEERS=[],MIG=null,RT=null,PRES=null;
 let ME={id:null,name:'',username:'',role:'user',avatarUrl:'',isOwner:false,canEdit:false};
 const SYNCED={},WQ={},WLATEST={},CREATING=new Set(),NAMES={},AVATARS={};let PEOPLE={},ADMINS=[],LEGACY={},SETTINGS={};
 function isAdmin(){return ME.role==='admin'}
@@ -460,10 +460,11 @@ function save(){
   S.orders.forEach(o=>{if(!o.ref||CREATING.has(o.ref))return;const j=JSON.stringify(o);if(SYNCED[o.ref]!==j){SYNCED[o.ref]=j;writeDoc('orders',o.ref,JSON.parse(j))}});
   const cj=JSON.stringify(cfgObj());if(CFG_SEEN&&cj!==CFG_J){CFG_J=cj;writeDoc('config','lists',JSON.parse(cj))}
 }
-function saveErr(e){const m=String(e&&e.message||'');return /JWT|session|auth/i.test(m)?'Your login has expired, please log in again':/history cannot be removed/i.test(m)?'Order history cannot be removed':'Could not save, check your internet connection ('+m.slice(0,80)+')'}
+function saveErr(e){const m=String(e&&e.message||'');return /permission|nothing was saved/i.test(m)?'NOT SAVED: this login has no permission to save. Tell your admin':/JWT|session|auth/i.test(m)?'Your login has expired, please log in again':/history cannot be removed/i.test(m)?'Order history cannot be removed':'Could not save, check your internet connection ('+m.slice(0,80)+')'}
 function writeDoc(table,key,data){const path=table+'/'+key;WLATEST[path]=data;if(WQ[path])return;
   WQ[path]=(async()=>{while(WLATEST[path]){const d=WLATEST[path];WLATEST[path]=null;
-    const run=()=>table==='orders'?SB.from('orders').update({doc:d}).eq('ref',key):SB.from('config').update({doc:d}).eq('key',key);
+    const run=async()=>{const q=table==='orders'?SB.from('orders').update({doc:d}).eq('ref',key).select('ref'):SB.from('config').update({doc:d}).eq('key',key).select('key');
+      const r=await q;if(!r.error&&Array.isArray(r.data)&&!r.data.length)r.error={message:'permission denied, nothing was saved'};return r};
     let {error}=await run();
     if(error&&!/history|permission|JWT/i.test(error.message||'')){await new Promise(r=>setTimeout(r,800+Math.random()*900));({error}=await run())}
     if(error){toast(saveErr(error))}}
@@ -493,13 +494,28 @@ function subscribeLive(){
       if(r.key==='legacy')LEGACY=r.doc||{};if(r.key==='settings'){SETTINGS=r.doc||{};if(VIEW==='setup'&&!modalOpen)renderSetup()}})
     .on('postgres_changes',{event:'*',schema:'public',table:'profiles'},async()=>{const {data}=await SB.from('profiles').select('id,username,display_name,role,active,created_at');applyPeople(data);renderWho();
       if((VIEW==='team'||VIEW==='setup')&&!isAdmin())setView('dashboard');else softSoon()})
-    .subscribe(st=>{if(st==='SUBSCRIBED'&&LOADED){loadAll().then(softRefresh).catch(()=>{})}});
+    .subscribe(st=>{RTST=st;if(st==='SUBSCRIBED'){if(LOADED)loadAll().then(softRefresh).catch(()=>{})}else if(/ERROR|TIMED_OUT|CLOSED/.test(st)&&LOADED&&!RTWARNED){RTWARNED=true;toast('Live connection lost. Refreshing automatically every 30 seconds')}});
   if(PRES)SB.removeChannel(PRES);
   PRES=SB.channel('online',{config:{presence:{key:ME.id}}});
   PRES.on('presence',{event:'sync'},()=>{const st=PRES.presenceState();PEERS=Object.entries(st).map(([k,arr])=>({peer:k,by:k,kind:'viewer',presence:{view:(arr[arr.length-1]||{}).view}}));renderOnline();if(VIEW==='team'&&!modalOpen)renderTeam()})
     .subscribe(async st=>{if(st==='SUBSCRIBED')await PRES.track({view:VIEW,at:Date.now()})});
   ROOM={presence:p=>PRES?PRES.track({...p,at:Date.now()}):Promise.resolve()};
 }
+async function pollSync(){
+  if(!LOADED||POLLING||!SB)return;POLLING=true;
+  try{
+    const rows=[];for(let from=0;;from+=1000){const {data,error}=await SB.from('orders').select('ref,doc').order('ref').range(from,from+999);if(error)throw error;rows.push(...data);if(data.length<1000)break}
+    rows.forEach(r=>{const path='orders/'+r.ref;if(WQ[path]||WLATEST[path]||CREATING.has(r.ref))return;applyDoc({...r.doc,ref:r.ref})});
+    const {data:pp}=await SB.from('profiles').select('id,username,display_name,role,active,created_at');if(pp)applyPeople(pp);
+    const {data:cf}=await SB.from('config').select('key,doc');
+    (cf||[]).forEach(r=>{if(r.key==='lists'&&!WQ['config/lists']&&!WLATEST['config/lists']&&JSON.stringify(cfgObj())===CFG_J){const d=r.doc||{};S.agents=d.agents||[];S.customers=d.customers||[];S.custAgent=d.custAgent||{};if(d.reasons&&d.reasons.length)S.reasons=d.reasons;CFG_J=JSON.stringify(cfgObj())}
+      if(r.key==='settings')SETTINGS=r.doc||{}});
+    LASTSYNC=Date.now();renderWho();softRefresh();
+  }catch(e){}
+  POLLING=false}
+setInterval(()=>{if(LOADED&&RTST!=='SUBSCRIBED'&&!document.hidden)pollSync()},30000);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&LOADED&&Date.now()-LASTSYNC>60000)pollSync()});
+window.addEventListener('online',()=>{if(LOADED)pollSync()});
 async function startShared(){
   view.innerHTML='<p class="empty">Loading orders...</p>';
   try{await loadAll()}catch(e){view.innerHTML=`<p class="empty">Could not load the orders (${esc(e.message||'connection problem')}). Reload the page to try again.</p>`;return}
@@ -1411,8 +1427,8 @@ async function reportImage(k,list){
     g.stroke();
     const blob=await new Promise(res=>cv.toBlob(res,'image/png'));
     if(!blob)throw new Error('png');
-    await saveFile(name,new Uint8Array(await blob.arrayBuffer()),'image/png');
-  }catch(e){toast('Could not make the report image. Try again')}
+    await saveFile(name,new Uint8Array(await blob.arrayBuffer()),'image/png');if(!DL)toast('Report image downloaded: '+name);
+  }catch(e){console.error(e);toast('Could not make the report image: '+(e&&e.message?e.message:e))}
   if(btn){btn.disabled=false;btn.textContent='🖼 Report Image'}}
 
 /* ---------- events ---------- */
