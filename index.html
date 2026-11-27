@@ -366,11 +366,11 @@ img.broken{min-height:40px;background:var(--danger-bg)}
 .themebtn{flex:none;display:inline-flex;align-items:center;gap:7px;padding:9px 13px}
 .themebtn .tt{font-weight:500}
 .mgreet{display:none;font-size:12.5px;color:var(--muted);font-weight:500}
-.greet{display:flex;align-items:center;gap:10px;padding:2px 6px 10px}
-.greet .gi{flex:none;width:34px;height:34px;border-radius:10px;display:grid;place-items:center;font-size:18px;background:rgba(255,255,255,.07)}
+.greet{flex:none;display:flex;align-items:center;gap:11px;margin:2px 2px 12px;padding:12px;border-radius:14px;background:linear-gradient(135deg,rgba(215,25,31,.30),rgba(215,25,31,.07));border:1px solid rgba(215,25,31,.38);box-shadow:0 6px 16px -8px rgba(215,25,31,.5)}
+.greet .gi{flex:none;width:36px;height:36px;border-radius:11px;display:grid;place-items:center;font-size:19px;background:rgba(255,255,255,.12)}
 .greet b{display:block;color:#fff;font-weight:600;font-size:14px;line-height:1.3;overflow-wrap:anywhere}
 .greet small{display:block;font-size:11.5px;color:var(--side-ink)}
-.tscroll{max-height:690px;overflow-y:auto;overflow-x:hidden;padding-right:4px;scrollbar-width:thin}
+.tscroll{max-height:690px;overflow-y:auto;overflow-x:hidden;padding-right:4px;scrollbar-width:thin;overscroll-behavior:contain}
 .tscroll .titem{height:40px;margin-bottom:6px}
 .tscroll .titem>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 @media (min-width:901px){
@@ -392,10 +392,10 @@ img.broken{min-height:40px;background:var(--danger-bg)}
   .logo-tile{margin-bottom:8px}
   .side-today{padding:10px}
   .ring{width:46px;height:46px}.ring span{width:36px;height:36px;font-size:11.5px}
-  .greet{padding-bottom:8px}.greet .gi{width:28px;height:28px;font-size:15px}
+  .greet{padding:8px 10px;margin-bottom:8px}.greet .gi{width:28px;height:28px;font-size:15px}
 }
 @media (max-width:900px){
-  .crumb{display:none}.mgreet{display:block}
+  .crumb{display:none}.mgreet{display:block}.side .greet{display:none}
   .themebtn .tt{display:none}.themebtn{padding:9px 11px}
 }
 </style>
@@ -406,8 +406,9 @@ img.broken{min-height:40px;background:var(--danger-bg)}
     <div class="logo-tile"><img id="logo" alt="CarTrends"></div>
     <div class="side-title">Order Tracker</div>
     <p class="side-sub">CarTrends Auto Parts</p>
+    <div class="greet" id="sideGreet"></div>
     <nav class="tabs" id="tabs" aria-label="Main navigation"></nav>
-    <div class="side-foot"><div class="greet" id="sideGreet"></div><div class="side-today" id="sideToday"></div>
+    <div class="side-foot"><div class="side-today" id="sideToday"></div>
       <div class="ucard" id="ucard"><span class="uav">R<i title="Online"></i></span><div><b>Ronak</b><small>CRM Executive</small></div></div></div>
   </aside>
   <div class="mainwrap">
@@ -1223,9 +1224,9 @@ function renderTeam(){
 
 /* ---------- settings ---------- */
 function renderSetup(){
-  const box=(k,t,s)=>{const ro=k==='reasons'&&!canAddStatus();return `<section class="panel"><h3>${t}</h3><p class="sub">${s}${k==='customers'?' ('+S.customers.length+' names)':''}${ro?'. Only admins can add or remove a status':''}</p>
+  const box=(k,t,s)=>{const ro=k==='reasons'&&!canAddStatus();return `<section class="panel"><h3>${t}</h3><p class="sub">${s}${' ('+S[k].length+(k==='reasons'?' statuses':' names')+')'}${ro?'. Only admins can add or remove a status':''}</p>
     ${ro?'':`<div class="addrow"><input id="add-${k}" placeholder="New name" aria-label="Add to ${t}"><button class="btn primary sm" data-act="additem" data-k="${k}">Add</button></div>`}
-    ${k==='customers'?'<div class="tscroll">':''}${S[k].map((v,i)=>`<div class="titem"><span>${esc(v)}${k==='customers'&&S.custAgent[v.toLowerCase()]?` <small class="muted">(${esc(S.custAgent[v.toLowerCase()])})</small>`:''}</span>${ro?'':`<button class="x" data-act="delitem" data-k="${k}" data-i="${i}" aria-label="Remove ${esc(v)}">×</button>`}</div>`).join('')}${k==='customers'?'</div>':''}</section>`};
+    <div class="tscroll">${S[k].map((v,i)=>`<div class="titem"><span title="${esc(v)}">${esc(v)}${k==='customers'&&S.custAgent[v.toLowerCase()]?` <small class="muted">(${esc(S.custAgent[v.toLowerCase()])})</small>`:''}</span>${ro?'':`<button class="x" data-act="delitem" data-k="${k}" data-i="${i}" aria-label="Remove ${esc(v)}">×</button>`}</div>`).join('')}</div></section>`};
   view.innerHTML=`<section class="list-head"><div><h2>Settings</h2><p class="sub">Manage dropdown lists here</p></div></section>
     <div class="set-grid">${box('agents','Agents','These names appear in the Agent Name dropdown')}${box('customers','Customers','Suggestions for Customer Name')}${box('reasons','Pending status','Options in the Order Pending status dropdown')}</div>
     <section class="panel" style="margin-top:16px"><h3>Connections (Google)</h3><p class="sub">Links from the Apps Script setup: attachments are saved in Google Drive, and the backup sheet updates every 5 minutes by itself.</p>
