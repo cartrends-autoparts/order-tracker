@@ -783,13 +783,14 @@ Object.entries(COL_ORDER).forEach(([k,names])=>{const L=LISTS[k];L.cols.push(C.l
 function renderList(k){
   const L=LISTS[k];
   view.innerHTML=`<section class="list-head"><div><h2>${L.title}</h2><p class="sub">${L.sub}</p></div>
-    <div class="tools"><span class="count" id="lcount"></span><input id="q" type="search" placeholder="Search ref, customer, agent" aria-label="Search">${k==='pending'||k==='punched'?'<button class="btn primary" id="rpt" title="Pending report as a formatted Excel file">📄 Report</button>':''}<button class="btn" id="xls">⬇ Export Excel</button></div></section>
+    <div class="tools"><span class="count" id="lcount"></span><input id="q" type="search" placeholder="Search ref, customer, agent" aria-label="Search">${k==='pending'||k==='punched'?'<button class="btn primary" id="rpt" title="Pending report as a formatted Excel file">📄 Report</button><button class="btn primary" id="rptimg" title="Same report as a picture (PNG)">🖼 Report Image</button>':''}<button class="btn" id="xls">⬇ Export Excel</button></div></section>
     <div class="frow">${filterBar(lf().k,lf(),'lrange')}<span class="fnote">Filtered by ${DATEF[k][1]}${lf().k!=='all'?': <b>'+esc(rangeLabel(lf().k,lf()))+'</b>':''}</span></div>
     <p id="needmsg" class="needmsg" hidden></p>
     <div class="tbl"><table class="list"><thead><tr id="thr">${thRow(k)}${actsOn(L)?'<th class="actcol">Action</th>':''}</tr></thead><tbody id="tb"></tbody></table></div>`;
   $('#q').addEventListener('input',drawRows);
   $('#xls').addEventListener('click',()=>exportXlsx(L.file+(lf().k==='all'?'':'_'+rangeLabel(lf().k,lf()).replace(/[^A-Za-z0-9-]+/g,'_')),L.cols,rowsOf(k)));
   if($('#rpt'))$('#rpt').addEventListener('click',()=>k==='punched'?punchedReport(rowsOf(k)):pendingReport(rowsOf(k)));
+  if($('#rptimg'))$('#rptimg').addEventListener('click',()=>reportImage(k,rowsOf(k)));
   drawRows();
 }
 function rowsOf(k){const L=LISTS[k];const q=(($('#q')||{}).value||'').trim().toLowerCase();
@@ -1367,6 +1368,52 @@ async function pendingReport(list){
     await saveFile(`Pending_Orders_Report_${fmtDate(Date.now())}.xlsx`,X.write(wb,{bookType:'xlsx',type:'array'}),'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   }catch(e){toast('Could not make the report. Check your internet connection and try again')}
   if(btn){btn.disabled=false;btn.textContent='📄 Report'}}
+
+
+/* ---------- report as image (PNG): same columns, yellow header, borders, centered ---------- */
+async function reportImage(k,list){
+  const punched=k==='punched';
+  if(!list.length)return toast(punched?'No punched orders in this view to put in the report':'No pending orders to put in the report');
+  const btn=$('#rptimg');if(btn){btn.disabled=true;btn.textContent='Preparing...'}
+  try{
+    let H,data,name;
+    if(punched){
+      const rows=list.slice().sort((a,b)=>String(a.agent||'').localeCompare(String(b.agent||''),'en',{sensitivity:'base'})||(a.punchedAt||0)-(b.punchedAt||0));
+      H=['Customer Name','Agent Name','Order Status','Order No'];
+      data=rows.map(o=>[o.customer,o.agent,'Order Punch',String(o.orderNo||'')]);
+      const f=LF.punched||{k:'today'},tag=f.k==='all'?'':'_'+rangeLabel(f.k,f).replace(/[^A-Za-z0-9-]+/g,'_');
+      name=`Punched_Orders_Report${tag}_${fmtDate(Date.now())}.png`;
+    }else{
+      const rows=list.slice().sort((a,b)=>String(a.pendingReason||'').localeCompare(String(b.pendingReason||''),'en',{sensitivity:'base'})||a.createdAt-b.createdAt);
+      H=['Customer Name','Agent Name','Order Status','Order Given','Pending Timeline','Remark'];
+      data=rows.map(o=>[o.customer,o.agent,String(o.pendingReason||'').toUpperCase(),fmtDT(o.createdAt),dur(o.createdAt),o.pendingRemark&&o.pendingRemark!=='-'?o.pendingRemark:'']);
+      name=`Pending_Orders_Report_${fmtDate(Date.now())}.png`;
+    }
+    data=data.map(r=>r.map(v=>String(v==null?'':v)));
+    const FONT='Cambria, Georgia, "Times New Roman", serif',PX=14,RH=30,HH=36,PAD=14;
+    const m=document.createElement('canvas').getContext('2d');
+    const cw=H.map((h,c)=>{m.font='bold 15px '+FONT;let w=m.measureText(h).width;m.font='15px '+FONT;data.forEach(r=>{w=Math.max(w,m.measureText(r[c]).width)});return Math.ceil(Math.min(w,700))+PAD*2});
+    const W=cw.reduce((a,b)=>a+b,0)+1,Ht=HH+RH*data.length+1;
+    const sc=Math.max(0.5,Math.min(2,Math.sqrt(14e6/(W*Ht)),15000/Ht,15000/W));
+    const cv=document.createElement('canvas');cv.width=Math.round(W*sc);cv.height=Math.round(Ht*sc);
+    const g=cv.getContext('2d');g.scale(sc,sc);
+    g.fillStyle='#FFFFFF';g.fillRect(0,0,W,Ht);
+    g.fillStyle='#FFFF00';g.fillRect(0,0,W,HH);
+    g.textAlign='center';g.textBaseline='middle';g.fillStyle='#000000';g.strokeStyle='#000000';g.lineWidth=1;
+    const fit=(t,w)=>{if(m.measureText(t).width<=w)return t;while(t.length>1&&m.measureText(t+'…').width>w)t=t.slice(0,-1);return t+'…'};
+    let x=0;
+    H.forEach((h,c)=>{g.font='bold 15px '+FONT;m.font=g.font;g.fillText(fit(h,cw[c]-8),x+cw[c]/2,HH/2+1);x+=cw[c]});
+    g.font='15px '+FONT;m.font=g.font;
+    data.forEach((r,i)=>{let x2=0;r.forEach((v,c)=>{g.fillText(fit(v,cw[c]-8),x2+cw[c]/2,HH+i*RH+RH/2+1);x2+=cw[c]})});
+    g.beginPath();
+    for(let i=0;i<=data.length+1;i++){const y=(i===0?0:HH+(i-1)*RH)+.5;g.moveTo(0,y);g.lineTo(W,y)}
+    let xx=.5;for(let c=0;c<=H.length;c++){g.moveTo(xx,0);g.lineTo(xx,Ht);xx+=cw[c]||0}
+    g.stroke();
+    const blob=await new Promise(res=>cv.toBlob(res,'image/png'));
+    if(!blob)throw new Error('png');
+    await saveFile(name,new Uint8Array(await blob.arrayBuffer()),'image/png');
+  }catch(e){toast('Could not make the report image. Try again')}
+  if(btn){btn.disabled=false;btn.textContent='🖼 Report Image'}}
 
 /* ---------- events ---------- */
 document.addEventListener('click',e=>{
