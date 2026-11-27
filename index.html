@@ -397,7 +397,7 @@ const $=s=>document.querySelector(s);
 const view=$('#view');
 const pad=n=>String(n).padStart(2,'0');
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-let S, VIEW='dashboard', RANGE='today', newFiles=[], modalOpen=false, DL=null;
+let S={agents:[],customers:[],custAgent:{},reasons:['Credit Block','FOC Issue','Payment Not Updated'],orders:[]}, VIEW='dashboard', RANGE='today', newFiles=[], modalOpen=false, DL=null;
 
 const I=p=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
 const ICON={
@@ -476,6 +476,7 @@ let SOFT_T=null;function softSoon(){clearTimeout(SOFT_T);SOFT_T=setTimeout(softR
 function applyPeople(rows){const p={};ADMINS=[];(rows||[]).forEach(r=>{p[r.id]={name:r.display_name,username:r.username,role:r.role,active:r.active,created_at:r.created_at};if(r.role==='admin'&&r.active)ADMINS.push(r.id)});PEOPLE=p;
   if(ME.id&&p[ME.id]){const me=p[ME.id];ME={...ME,name:me.name,username:me.username,role:me.role,isOwner:me.role==='admin',canEdit:me.role==='admin'};if(!me.active){doLogout('Your login has been disabled by an admin.');return}}}
 async function loadAll(){
+  if(!S||typeof S!=='object')S={agents:[],customers:[],custAgent:{},reasons:['Credit Block','FOC Issue','Payment Not Updated'],orders:[]};
   const rows=[];for(let from=0;;from+=1000){const {data,error}=await SB.from('orders').select('ref,doc').order('ref').range(from,from+999);if(error)throw error;rows.push(...data);if(data.length<1000)break}
   S.orders=[];rows.forEach(r=>{const d={...r.doc,ref:r.ref};S.orders.push(d);SYNCED[r.ref]=JSON.stringify(d)});
   const {data:cf,error:ce}=await SB.from('config').select('key,doc');if(ce)throw ce;
